@@ -93,6 +93,16 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
 .next-bar .next-info strong{color:var(--text);display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next-bar button{background:var(--accent);color:#fff;border:none;border-radius:10px;font:inherit;font-weight:700;font-size:.92rem;padding:12px 16px;cursor:pointer;white-space:nowrap}
 .next-bar button:disabled{opacity:.45;cursor:not-allowed}
+.group-checkbox{appearance:none;-webkit-appearance:none;width:22px;height:22px;border:2px solid var(--muted);border-radius:6px;background:var(--input);display:grid;place-content:center;cursor:pointer;flex-shrink:0}
+.group-checkbox::before{content:"";width:12px;height:12px;transform:scale(0);transition:transform .12s;box-shadow:inset 1em 1em #fff;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0%,43% 62%)}
+.group-checkbox:checked{background:var(--accent);border-color:var(--accent)}
+.group-checkbox:checked::before{transform:scale(1)}
+.group-row.checked{background:var(--row-hover)}
+.sel-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px}
+.preview-box{width:100%;min-height:90px;max-height:260px;padding:12px 14px;font-size:.88rem;line-height:1.55;color:var(--text);background:var(--preview);border:1px solid var(--border);border-radius:10px;white-space:pre-wrap;word-break:break-word;overflow-y:auto}
+.preview-box.empty{color:var(--muted);font-style:italic}
+.group-link-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;color:var(--muted);text-decoration:none;flex-shrink:0;font-size:1rem}
+.group-link-btn:active{background:var(--badge);color:var(--accent)}
 body{padding-bottom:110px}
 @media (max-width:480px){body{padding:10px;padding-bottom:36px}.group-row{padding:12px 10px}.btn-open{padding:9px 9px;font-size:.8rem}header h1{font-size:1.15rem}}
 </style>
@@ -112,6 +122,7 @@ body{padding-bottom:110px}
       <div><strong>1.</strong> Paste / write your post in the editor and edit it.</div>
       <div><strong>2.</strong> Tap <strong>Copy + Open</strong> on a group — your text is copied and the group opens.</div>
       <div><strong>3.</strong> In Facebook: tap “Write something…”, long-press → Paste, add your image/video, Post. Come back and tap ✓.</div>
+      <div><strong>Or:</strong> tick groups with the checkboxes and tap <strong>Copy selected group names + links</strong> — the old Copier list, with a live preview. The ↗ on a row just opens that group.</div>
     </div>
   </section>
 
@@ -130,10 +141,6 @@ body{padding-bottom:110px}
       <div id="selInfo" class="sel-info">0 characters · 0 lines</div>
     </div>
     <div class="toolbar" style="padding-bottom:4px">
-      <div>
-        <div class="tool-label">Emoji — tap to insert at cursor</div>
-        <div class="tool-row" id="emojiBar"></div>
-      </div>
       <div>
         <div class="tool-label">Snippets — tap to insert at cursor</div>
         <div class="tool-row" id="snippetBar"></div>
@@ -196,9 +203,23 @@ body{padding-bottom:110px}
     </div>
     <div class="search-wrap">
       <input type="search" id="searchInput" placeholder="Search groups (සිංහල / English)…" autocomplete="off" aria-label="Search groups">
+      <div class="sel-row">
+        <span id="selCounter" class="progress-badge">0 selected</span>
+        <span style="display:flex;gap:6px">
+          <button type="button" id="selectAllGroupsBtn" class="tool-btn">Select all</button>
+          <button type="button" id="clearGroupsBtn" class="tool-btn">Clear all</button>
+        </span>
+      </div>
     </div>
     <ul id="groupList" class="group-list"></ul>
     <div id="emptyState" class="empty-state">No matching groups found.</div>
+    <div class="editor-actions" style="padding-top:14px">
+      <button type="button" id="copyGroupsBtn" class="btn btn-primary" disabled>📋 Copy selected group names + links</button>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px">
+      <div class="tool-label">Live preview — what Copy will copy</div>
+      <div id="groupsPreview" class="preview-box empty">Tick one or more groups above to preview the names + links that will be copied.</div>
+    </div>
     <div class="groups-actions">
       <button type="button" id="resetProgressBtn" class="btn btn-secondary">Reset progress only</button>
       <button type="button" id="newPostBtn" class="btn btn-danger-ghost">🆕 New post (clear text + progress)</button>
@@ -296,14 +317,6 @@ function insertAtCursor(text){
   const v=ta.value;
   applyEdit(v.slice(0,s)+text+v.slice(e),s+text.length,s+text.length);
 }
-const EMOJIS=["🐾","🥺","💔","🙏","📍","📞","❤️","😢","🐶","🐱","🏥","💊","🍚","🏦","👉","✅"];
-const emojiBar=document.getElementById("emojiBar");
-EMOJIS.forEach(em=>{
-  const b=document.createElement("button");b.type="button";b.className="chip-btn emoji-btn";b.textContent=em;
-  b.addEventListener("pointerdown",ev=>{ev.preventDefault();rememberSel();});
-  b.addEventListener("click",()=>insertAtCursor(em));
-  emojiBar.appendChild(b);
-});
 const SNIPPETS=[
 {label:"📍 Location",text:"\n📍 ස්ථානය: "},
 {label:"📞 Contact",text:"\n📞 වැඩි විස්තර :\n"},
@@ -356,6 +369,27 @@ let state={};
 try{state=JSON.parse(localStorage.getItem(K_STATE)||"{}")||{};}catch(e){state={};}
 function saveState(){try{localStorage.setItem(K_STATE,JSON.stringify(state));}catch(e){}}
 const listEl=document.getElementById("groupList"),emptyEl=document.getElementById("emptyState"),progEl=document.getElementById("progressBadge"),searchEl=document.getElementById("searchInput");
+/* Copier selection (tick groups -> copy names + links) */
+const K_SEL="fb_poster_copier_selected_v1";
+let selGroups=new Set();
+try{const raw=JSON.parse(localStorage.getItem(K_SEL)||"[]");if(Array.isArray(raw)){const valid=new Set(GROUPS.map(g=>g.url));raw.forEach(u=>{if(valid.has(u))selGroups.add(u);});}}catch(e){}
+function saveSelGroups(){try{localStorage.setItem(K_SEL,JSON.stringify(GROUPS.filter(g=>selGroups.has(g.url)).map(g=>g.url)));}catch(e){}}
+function getCopierOutput(){return GROUPS.filter(g=>selGroups.has(g.url)).map(g=>g.name+"\n"+g.url).join("\n\n");}
+function updateSelUI(){
+  const n=selGroups.size;
+  document.getElementById("selCounter").textContent=n+" selected";
+  document.getElementById("copyGroupsBtn").disabled=n===0;
+  const pv=document.getElementById("groupsPreview");
+  if(n===0){pv.textContent="Tick one or more groups above to preview the names + links that will be copied.";pv.classList.add("empty");}
+  else{pv.textContent=getCopierOutput();pv.classList.remove("empty");}
+}
+document.getElementById("selectAllGroupsBtn").addEventListener("click",()=>{GROUPS.forEach(g=>selGroups.add(g.url));saveSelGroups();renderGroups();});
+document.getElementById("clearGroupsBtn").addEventListener("click",()=>{selGroups.clear();saveSelGroups();renderGroups();});
+document.getElementById("copyGroupsBtn").addEventListener("click",async()=>{
+  if(selGroups.size===0)return;
+  const ok=await copyText(getCopierOutput());
+  toast(ok?"Group names + links copied ✓":"Copy failed",!ok);
+});
 async function openGroup(g){
   if(!ta.value){toast("Add your post text in the editor first",true);ta.focus();window.scrollTo({top:0,behavior:"smooth"});return;}
   const ok=await copyText(ta.value);
@@ -370,7 +404,10 @@ function renderGroups(){
   GROUPS.forEach(g=>{
     if(q&&!g.name.toLocaleLowerCase().includes(q))return;visible++;
     const st=state[g.url]||"";
-    const li=document.createElement("li");li.className="group-row"+(g.url===nextUrl?" next":"");
+    const li=document.createElement("li");li.className="group-row"+(g.url===nextUrl?" next":"")+(selGroups.has(g.url)?" checked":"");
+    const cb=document.createElement("input");cb.type="checkbox";cb.className="group-checkbox";cb.checked=selGroups.has(g.url);cb.setAttribute("aria-label","Select "+g.name+" for copying names + links");
+    cb.addEventListener("change",()=>{if(cb.checked)selGroups.add(g.url);else selGroups.delete(g.url);saveSelGroups();li.classList.toggle("checked",cb.checked);updateSelUI();});
+    li.appendChild(cb);
     const info=document.createElement("div");info.className="group-info";
     const nm=document.createElement("div");nm.className="group-name";nm.textContent=g.name;
     const stEl=document.createElement("div");stEl.className="group-status "+(st==="posted"?"st-posted":st==="skipped"?"st-skipped":st==="opened"?"st-opened":"st-none");
@@ -384,8 +421,10 @@ function renderGroups(){
     const done=document.createElement("button");done.type="button";done.className="btn-done"+(st==="posted"?" on":"");done.textContent="✓";done.title="Mark as posted";done.setAttribute("aria-label","Mark "+g.name+" as posted");
     done.addEventListener("click",()=>{if(state[g.url]==="posted"){delete state[g.url];}else{state[g.url]="posted";toast("Marked posted ✓");}saveState();renderGroups();});
     btns.appendChild(open);btns.appendChild(skip);btns.appendChild(done);
-    li.appendChild(info);li.appendChild(btns);listEl.appendChild(li);
+    const ext=document.createElement("a");ext.href=g.url;ext.target="_blank";ext.rel="noopener noreferrer";ext.className="group-link-btn";ext.textContent="↗";ext.title="Open group (without copying)";ext.setAttribute("aria-label","Open "+g.name);
+    li.appendChild(info);li.appendChild(btns);li.appendChild(ext);listEl.appendChild(li);
   });
+  updateSelUI();
   emptyEl.classList.toggle("visible",visible===0);
   const posted=GROUPS.filter(g=>state[g.url]==="posted").length;
   const skipped=GROUPS.filter(g=>state[g.url]==="skipped").length;
