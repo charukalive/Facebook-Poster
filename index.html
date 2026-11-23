@@ -76,6 +76,24 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--success-bg);color:var(--success-text);border:1px solid var(--success);font-size:.9rem;font-weight:700;padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:all .2s ease;z-index:50;max-width:92vw;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.warn{background:var(--warn-bg);color:var(--warn-text);border-color:var(--warn)}
+.fr-wrap{padding:0 16px 12px;display:flex;flex-direction:column;gap:8px}
+.fr-row{display:flex;gap:6px;flex-wrap:wrap}
+.fr-row input{flex:1;min-width:120px;padding:10px 12px;font:inherit;font-size:.92rem;color:var(--text);background:var(--input);border:1px solid var(--border);border-radius:8px;outline:none}
+.fr-row input:focus{border-color:var(--accent)}
+.chip-btn{background:var(--input);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:999px;font:inherit;font-size:.88rem;cursor:pointer;user-select:none}
+.chip-btn:active{background:var(--row-hover);border-color:var(--accent)}
+.emoji-btn{font-size:1.15rem;padding:6px 9px}
+.card.fullscreen{position:fixed;inset:8px;z-index:60;overflow-y:auto}
+.card.fullscreen textarea#postText{min-height:52vh}
+.btn-skip{background:var(--input);border:1px solid var(--border);color:var(--muted);border-radius:8px;font:inherit;font-size:.8rem;font-weight:600;padding:9px 9px;cursor:pointer;white-space:nowrap}
+.btn-skip.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn-text)}
+.st-skipped{color:var(--warn)}
+.next-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 14px rgba(0,0,0,.12);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px}
+.next-bar .next-info{flex:1;min-width:0;font-size:.85rem;color:var(--secondary)}
+.next-bar .next-info strong{color:var(--text);display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.next-bar button{background:var(--accent);color:#fff;border:none;border-radius:10px;font:inherit;font-weight:700;font-size:.92rem;padding:12px 16px;cursor:pointer;white-space:nowrap}
+.next-bar button:disabled{opacity:.45;cursor:not-allowed}
+body{padding-bottom:110px}
 @media (max-width:480px){body{padding:10px;padding-bottom:36px}.group-row{padding:12px 10px}.btn-open{padding:9px 9px;font-size:.8rem}header h1{font-size:1.15rem}}
 </style>
 </head>
@@ -97,14 +115,41 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
     </div>
   </section>
 
-  <section class="card" aria-label="Post editor">
+  <section class="card" id="editorCard" aria-label="Post editor">
     <div class="card-head">
       <span class="card-title">✍️ Post Editor</span>
+      <span style="display:flex;gap:6px;align-items:center">
+        <button type="button" id="fontDownBtn" class="tool-btn" title="Smaller text">A−</button>
+        <button type="button" id="fontUpBtn" class="tool-btn" title="Bigger text">A+</button>
+        <button type="button" id="expandBtn" class="tool-btn" title="Full-screen editor">⛶ Expand</button>
+      </span>
       <span id="saveStatus" class="save-status">Not saved yet</span>
     </div>
     <div class="editor-wrap">
       <textarea id="postText" placeholder="Paste or write your post text here…" aria-label="Post text editor"></textarea>
       <div id="selInfo" class="sel-info">0 characters · 0 lines</div>
+    </div>
+    <div class="toolbar" style="padding-bottom:4px">
+      <div>
+        <div class="tool-label">Emoji — tap to insert at cursor</div>
+        <div class="tool-row" id="emojiBar"></div>
+      </div>
+      <div>
+        <div class="tool-label">Snippets — tap to insert at cursor</div>
+        <div class="tool-row" id="snippetBar"></div>
+      </div>
+    </div>
+    <div class="fr-wrap">
+      <div class="tool-label">Find &amp; Replace</div>
+      <div class="fr-row">
+        <input type="text" id="findInput" placeholder="Find…" aria-label="Find text">
+        <input type="text" id="replaceInput" placeholder="Replace with…" aria-label="Replace with">
+      </div>
+      <div class="fr-row">
+        <button type="button" class="tool-btn" id="replaceOneBtn">Replace next</button>
+        <button type="button" class="tool-btn" id="replaceAllBtn">Replace all</button>
+        <span id="findCount" class="sel-info" style="margin:0;align-self:center"></span>
+      </div>
     </div>
     <div class="toolbar">
       <div>
@@ -115,6 +160,7 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
           <button type="button" class="tool-btn" data-act="copySel">📋 Copy</button>
           <button type="button" class="tool-btn" data-act="dupSel">⧉ Duplicate</button>
           <button type="button" class="tool-btn" data-act="selectAll">Select all</button>
+          <button type="button" class="tool-btn" data-act="selectPara">Select paragraph</button>
         </div>
       </div>
       <div>
@@ -132,6 +178,7 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
         <div class="tool-row">
           <button type="button" class="tool-btn" data-act="undo">↩ Undo</button>
           <button type="button" class="tool-btn" data-act="redo">↪ Redo</button>
+          <button type="button" class="tool-btn" data-act="cleanup">🧹 Clean up</button>
           <button type="button" class="tool-btn danger" data-act="clearAll">Clear all</button>
         </div>
       </div>
@@ -157,6 +204,10 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
       <button type="button" id="newPostBtn" class="btn btn-danger-ghost">🆕 New post (clear text + progress)</button>
     </div>
   </section>
+</div>
+<div class="next-bar" id="nextBar">
+  <div class="next-info">Next group<strong id="nextName">—</strong></div>
+  <button type="button" id="nextBtn">Copy + Open next →</button>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
@@ -217,49 +268,133 @@ function doAction(act){
     let cs=0;const target=Math.max(idx,swap)===idx?swap:idx;let acc=0;for(let i=0;i<target;i++)acc+=lines[i].length+1;cs=acc;
     applyEdit(nv,cs,cs);
   }
+  else if(act==="selectPara"){
+    let ps=v.lastIndexOf("\n\n",s-1); ps=ps===-1?0:ps+2;
+    let pe=v.indexOf("\n\n",s); if(pe===-1)pe=v.length;
+    if(ps>=pe){ps=lineBounds(v,s).s;pe=lineBounds(v,s).e;}
+    ta.focus();ta.setSelectionRange(ps,pe);savedSel={start:ps,end:pe};updateInfo();
+  }
+  else if(act==="cleanup"){
+    if(!v){toast("Editor is empty",true);return;}
+    let nv=v.split("\n").map(l=>l.replace(/[ \t]+$/,"")).join("\n");
+    nv=nv.replace(/\n{3,}/g,"\n\n").replace(/^\n+/,"").replace(/\n+$/,"");
+    if(nv===v){toast("Nothing to clean up");return;}
+    applyEdit(nv,0,0);toast("Cleaned up ✓ (Undo can reverse it)");
+  }
   else if(act==="undo"){if(!undoStack.length){toast("Nothing to undo",true);return;}redoStack.push(ta.value);const prev=undoStack.pop();ta.value=prev;lastPushed=prev;ta.focus();onTextChanged();}
   else if(act==="redo"){if(!redoStack.length){toast("Nothing to redo",true);return;}undoStack.push(ta.value);const nxt=redoStack.pop();ta.value=nxt;lastPushed=nxt;ta.focus();onTextChanged();}
   else if(act==="clearAll"){if(!v){return;}if(ta.dataset.confirm==="1"){applyEdit("",0,0);ta.dataset.confirm="";toast("Cleared");}else{ta.dataset.confirm="1";toast("Tap Clear all again to confirm",true);setTimeout(()=>{ta.dataset.confirm=""},3000);}}
 }
-document.querySelectorAll(".tool-btn").forEach(btn=>{
+document.querySelectorAll(".tool-btn[data-act]").forEach(btn=>{
   btn.addEventListener("pointerdown",ev=>{ev.preventDefault();rememberSel();});
   btn.addEventListener("click",()=>doAction(btn.dataset.act));
+});
+/* Insert at cursor (emoji + snippets) */
+function insertAtCursor(text){
+  let s=savedSel.start,e=savedSel.end;
+  if(document.activeElement===ta){s=ta.selectionStart;e=ta.selectionEnd;}
+  const v=ta.value;
+  applyEdit(v.slice(0,s)+text+v.slice(e),s+text.length,s+text.length);
+}
+const EMOJIS=["🐾","🥺","💔","🙏","📍","📞","❤️","😢","🐶","🐱","🏥","💊","🍚","🏦","👉","✅"];
+const emojiBar=document.getElementById("emojiBar");
+EMOJIS.forEach(em=>{
+  const b=document.createElement("button");b.type="button";b.className="chip-btn emoji-btn";b.textContent=em;
+  b.addEventListener("pointerdown",ev=>{ev.preventDefault();rememberSel();});
+  b.addEventListener("click",()=>insertAtCursor(em));
+  emojiBar.appendChild(b);
+});
+const SNIPPETS=[
+{label:"📍 Location",text:"\n📍 ස්ථානය: "},
+{label:"📞 Contact",text:"\n📞 වැඩි විස්තර :\n"},
+{label:"🏦 Bank details",text:"\n🏦 බැංකු විස්තර:\nනම: \nබැංකුව: \nගිණුම් අංකය: \n"},
+{label:"🙏 Share appeal",text:"\nමෙම සටහන අන් අය අතරේ Share කර හෝ මේ අහිංසක ජීවිතය බේරාගැනීමට දායක වන්න. 🙏\n"},
+{label:"✉️ ලැබුණු පණිවිඩයකි",text:"\n--- ලැබුණු පණිවිඩයකි ---\n"},
+{label:"# Hashtags",text:"\n#AnimalRescue #AdoptDontShop #StreetAnimals #SriLanka\n"}
+];
+const snippetBar=document.getElementById("snippetBar");
+SNIPPETS.forEach(sn=>{
+  const b=document.createElement("button");b.type="button";b.className="chip-btn";b.textContent=sn.label;
+  b.addEventListener("pointerdown",ev=>{ev.preventDefault();rememberSel();});
+  b.addEventListener("click",()=>{insertAtCursor(sn.text);toast("Snippet inserted — fill in the details");});
+  snippetBar.appendChild(b);
+});
+/* Font size + full-screen */
+const K_FONT="fb_poster_font_v1";const FONT_SIZES=[14,16,18,20,22,24];let fontIdx=1;
+try{const fv=parseInt(localStorage.getItem(K_FONT)||"1",10);if(fv>=0&&fv<FONT_SIZES.length)fontIdx=fv;}catch(e){}
+function applyFont(){ta.style.fontSize=FONT_SIZES[fontIdx]+"px";try{localStorage.setItem(K_FONT,String(fontIdx));}catch(e){}}
+document.getElementById("fontUpBtn").addEventListener("click",()=>{if(fontIdx<FONT_SIZES.length-1){fontIdx++;applyFont();}});
+document.getElementById("fontDownBtn").addEventListener("click",()=>{if(fontIdx>0){fontIdx--;applyFont();}});
+const editorCard=document.getElementById("editorCard"),expandBtn=document.getElementById("expandBtn");
+expandBtn.addEventListener("click",()=>{
+  const full=editorCard.classList.toggle("fullscreen");
+  expandBtn.textContent=full?"✕ Close":"⛶ Expand";
+  document.body.style.overflow=full?"hidden":"";
+  if(full)ta.focus();
+});
+/* Find & Replace (plain text, not regex) */
+const findInput=document.getElementById("findInput"),replaceInput=document.getElementById("replaceInput"),findCount=document.getElementById("findCount");
+function countMatches(){const f=findInput.value;if(!f){findCount.textContent="";return 0;}const n=ta.value.split(f).length-1;findCount.textContent=n===0?"No matches":n+" match"+(n===1?"":"es");return n;}
+findInput.addEventListener("input",countMatches);
+document.getElementById("replaceAllBtn").addEventListener("click",()=>{
+  const f=findInput.value;if(!f){toast("Type what to find first",true);return;}
+  const n=countMatches();if(n===0){toast("No matches found",true);return;}
+  applyEdit(ta.value.split(f).join(replaceInput.value),0,0);
+  toast("Replaced "+n+" ✓");countMatches();
+});
+document.getElementById("replaceOneBtn").addEventListener("click",()=>{
+  const f=findInput.value;if(!f){toast("Type what to find first",true);return;}
+  const v=ta.value;let from=document.activeElement===ta?ta.selectionEnd:savedSel.end;
+  let idx=v.indexOf(f,from);if(idx===-1)idx=v.indexOf(f,0);
+  if(idx===-1){toast("No matches found",true);return;}
+  const r=replaceInput.value;
+  applyEdit(v.slice(0,idx)+r+v.slice(idx+f.length),idx,idx+r.length);
+  countMatches();
 });
 /* Groups */
 let state={};
 try{state=JSON.parse(localStorage.getItem(K_STATE)||"{}")||{};}catch(e){state={};}
 function saveState(){try{localStorage.setItem(K_STATE,JSON.stringify(state));}catch(e){}}
 const listEl=document.getElementById("groupList"),emptyEl=document.getElementById("emptyState"),progEl=document.getElementById("progressBadge"),searchEl=document.getElementById("searchInput");
+async function openGroup(g){
+  if(!ta.value){toast("Add your post text in the editor first",true);ta.focus();window.scrollTo({top:0,behavior:"smooth"});return;}
+  const ok=await copyText(ta.value);
+  if(state[g.url]!=="posted"&&state[g.url]!=="skipped")state[g.url]="opened";saveState();renderGroups();
+  toast(ok?"Text copied ✓ — paste it in the group":"Copy failed — use Copy whole post first",!ok);
+  window.open(g.url,"_blank");
+}
+function nextGroup(){return GROUPS.find(g=>state[g.url]!=="posted"&&state[g.url]!=="skipped")||null;}
 function renderGroups(){
   const q=searchEl.value.trim().toLocaleLowerCase();listEl.innerHTML="";let visible=0;
-  const nextUrl=(GROUPS.find(g=>state[g.url]!=="posted")||{}).url;
+  const ng=nextGroup();const nextUrl=ng?ng.url:null;
   GROUPS.forEach(g=>{
     if(q&&!g.name.toLocaleLowerCase().includes(q))return;visible++;
     const st=state[g.url]||"";
-    const li=document.createElement("li");li.className="group-row"+(g.url===nextUrl&&st!=="posted"?" next":"");
+    const li=document.createElement("li");li.className="group-row"+(g.url===nextUrl?" next":"");
     const info=document.createElement("div");info.className="group-info";
     const nm=document.createElement("div");nm.className="group-name";nm.textContent=g.name;
-    const stEl=document.createElement("div");stEl.className="group-status "+(st==="posted"?"st-posted":st==="opened"?"st-opened":"st-none");
-    stEl.textContent=st==="posted"?"✓ Posted":st==="opened"?"Opened — not marked posted yet":"Not posted yet"+(g.url===nextUrl?" · Next":"");
+    const stEl=document.createElement("div");stEl.className="group-status "+(st==="posted"?"st-posted":st==="skipped"?"st-skipped":st==="opened"?"st-opened":"st-none");
+    stEl.textContent=st==="posted"?"✓ Posted":st==="skipped"?"⏭ Skipped for this post":st==="opened"?"Opened — not marked posted yet":"Not posted yet"+(g.url===nextUrl?" · Next":"");
     info.appendChild(nm);info.appendChild(stEl);
     const btns=document.createElement("div");btns.className="row-btns";
     const open=document.createElement("button");open.type="button";open.className="btn-open";open.textContent="Copy + Open";
-    open.addEventListener("click",async()=>{
-      if(!ta.value){toast("Add your post text in the editor first",true);ta.focus();window.scrollTo({top:0,behavior:"smooth"});return;}
-      const ok=await copyText(ta.value);
-      if(state[g.url]!=="posted")state[g.url]="opened";saveState();renderGroups();
-      toast(ok?"Text copied ✓ — paste it in the group":"Copy failed — use Copy whole post first",!ok);
-      window.open(g.url,"_blank");
-    });
+    open.addEventListener("click",()=>openGroup(g));
+    const skip=document.createElement("button");skip.type="button";skip.className="btn-skip"+(st==="skipped"?" on":"");skip.textContent="Skip";skip.title="Skip this group for this post";
+    skip.addEventListener("click",()=>{if(state[g.url]==="skipped"){delete state[g.url];}else{state[g.url]="skipped";toast("Skipped for this post");}saveState();renderGroups();});
     const done=document.createElement("button");done.type="button";done.className="btn-done"+(st==="posted"?" on":"");done.textContent="✓";done.title="Mark as posted";done.setAttribute("aria-label","Mark "+g.name+" as posted");
     done.addEventListener("click",()=>{if(state[g.url]==="posted"){delete state[g.url];}else{state[g.url]="posted";toast("Marked posted ✓");}saveState();renderGroups();});
-    btns.appendChild(open);btns.appendChild(done);
+    btns.appendChild(open);btns.appendChild(skip);btns.appendChild(done);
     li.appendChild(info);li.appendChild(btns);listEl.appendChild(li);
   });
   emptyEl.classList.toggle("visible",visible===0);
   const posted=GROUPS.filter(g=>state[g.url]==="posted").length;
-  progEl.textContent=posted+" / "+GROUPS.length+" posted";
+  const skipped=GROUPS.filter(g=>state[g.url]==="skipped").length;
+  progEl.textContent=posted+" posted"+(skipped?" · "+skipped+" skipped":"")+" / "+GROUPS.length;
+  const nextNameEl=document.getElementById("nextName"),nextBtn=document.getElementById("nextBtn");
+  if(ng){nextNameEl.textContent=ng.name;nextBtn.disabled=false;nextBtn.textContent="Copy + Open next →";}
+  else{nextNameEl.textContent="All groups done 🎉";nextBtn.disabled=true;nextBtn.textContent="All done ✓";}
 }
+document.getElementById("nextBtn").addEventListener("click",()=>{const ng=nextGroup();if(ng)openGroup(ng);});
 searchEl.addEventListener("input",renderGroups);
 document.getElementById("resetProgressBtn").addEventListener("click",()=>{state={};saveState();renderGroups();toast("Progress reset");});
 let newPostArmed=false;
@@ -275,7 +410,7 @@ const themeIcon=document.getElementById("themeIcon"),themeLabel=document.getElem
 function applyTheme(){const r=document.documentElement;if(themeMode==="auto"){r.removeAttribute("data-theme");themeIcon.textContent="🌓";themeLabel.textContent="Auto";}else if(themeMode==="light"){r.setAttribute("data-theme","light");themeIcon.textContent="☀️";themeLabel.textContent="Light";}else{r.setAttribute("data-theme","dark");themeIcon.textContent="🌙";themeLabel.textContent="Dark";}}
 document.getElementById("themeToggleBtn").addEventListener("click",()=>{themeMode=THEMES[(THEMES.indexOf(themeMode)+1)%THEMES.length];applyTheme();try{localStorage.setItem(K_THEME,themeMode);}catch(e){}});
 /* Init */
-(function init(){applyTheme();try{ta.value=localStorage.getItem(K_TEXT)||"";}catch(e){}lastPushed=ta.value;if(ta.value){saveStatus.textContent="Saved ✓ (restored)";saveStatus.classList.add("saved");}updateInfo();renderGroups();})();
+(function init(){applyTheme();applyFont();try{ta.value=localStorage.getItem(K_TEXT)||"";}catch(e){}lastPushed=ta.value;if(ta.value){saveStatus.textContent="Saved ✓ (restored)";saveStatus.classList.add("saved");}updateInfo();renderGroups();})();
 </script>
 </body>
 </html>
