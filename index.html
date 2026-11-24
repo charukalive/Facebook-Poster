@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Facebook Poster</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1877f2">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 :root{
   color-scheme:light dark;
@@ -103,6 +108,22 @@ textarea#postText:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,
 .preview-box.empty{color:var(--muted);font-style:italic}
 .group-link-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;color:var(--muted);text-decoration:none;flex-shrink:0;font-size:1rem}
 .group-link-btn:active{background:var(--badge);color:var(--accent)}
+.panel{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.panel input[type="text"],.panel select{flex:1;min-width:120px;padding:10px 12px;font:inherit;font-size:.92rem;color:var(--text);background:var(--input);border:1px solid var(--border);border-radius:8px;outline:none;width:100%}
+.panel input:focus,.panel select:focus{border-color:var(--accent)}
+.mini-btn{background:var(--input);border:1px solid var(--border);color:var(--text);border-radius:8px;font:inherit;font-size:.8rem;font-weight:600;padding:7px 9px;cursor:pointer;white-space:nowrap}
+.mini-btn.danger{color:var(--danger)}
+.mini-btn:disabled{opacity:.4}
+.filter-chip{background:var(--input);border:1px solid var(--border);color:var(--secondary);padding:7px 13px;border-radius:999px;font:inherit;font-size:.83rem;font-weight:700;cursor:pointer}
+.filter-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.manage-btns{display:none;gap:4px;flex-shrink:0}
+body.managing .manage-btns{display:flex}
+.hist-item{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}
+.hist-item:last-child{border-bottom:none}
+.hist-info{flex:1;min-width:0}
+.hist-title{font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-sub{font-size:.76rem;color:var(--muted)}
+.voice-on{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important}
 body{padding-bottom:110px}
 @media (max-width:480px){body{padding:10px;padding-bottom:36px}.group-row{padding:12px 10px}.btn-open{padding:9px 9px;font-size:.8rem}header h1{font-size:1.15rem}}
 </style>
@@ -145,6 +166,10 @@ body{padding-bottom:110px}
         <div class="tool-label">Snippets — tap to insert at cursor</div>
         <div class="tool-row" id="snippetBar"></div>
       </div>
+      <div>
+        <div class="tool-label">Templates — tap to start a post (blanks like [ස්ථානය] to fill in)</div>
+        <div class="tool-row" id="templateBar"></div>
+      </div>
     </div>
     <div class="fr-wrap">
       <div class="tool-label">Find &amp; Replace</div>
@@ -168,6 +193,7 @@ body{padding-bottom:110px}
           <button type="button" class="tool-btn" data-act="dupSel">⧉ Duplicate</button>
           <button type="button" class="tool-btn" data-act="selectAll">Select all</button>
           <button type="button" class="tool-btn" data-act="selectPara">Select paragraph</button>
+          <button type="button" class="tool-btn" data-act="nextBlank">Next blank →</button>
         </div>
       </div>
       <div>
@@ -192,7 +218,24 @@ body{padding-bottom:110px}
     </div>
     <div class="editor-actions">
       <button type="button" id="copyPostBtn" class="btn btn-primary">📋 Copy whole post</button>
+      <button type="button" id="voiceBtn" class="btn btn-secondary">🎤 Voice (Sinhala)</button>
       <button type="button" id="saveBtn" class="btn btn-secondary">💾 Save</button>
+    </div>
+    <div class="panel" aria-label="Drafts">
+      <div class="tool-label">Drafts — save this post under a name, keep several going</div>
+      <div class="fr-row">
+        <input type="text" id="draftNameInput" placeholder="Draft name (e.g. Ganemulla dog)…">
+        <button type="button" class="tool-btn" id="saveDraftBtn">Save draft</button>
+      </div>
+      <div class="fr-row">
+        <select id="draftSelect" aria-label="Saved drafts"><option value="">— No drafts saved —</option></select>
+        <button type="button" class="tool-btn" id="loadDraftBtn">Load</button>
+        <button type="button" class="tool-btn danger" id="deleteDraftBtn">Delete</button>
+      </div>
+    </div>
+    <div class="panel" aria-label="History">
+      <div class="tool-label">History — your last finished posts (New post archives here first)</div>
+      <div id="historyList"><div class="hist-sub">Nothing archived yet.</div></div>
     </div>
   </section>
 
@@ -210,6 +253,14 @@ body{padding-bottom:110px}
           <button type="button" id="clearGroupsBtn" class="tool-btn">Clear all</button>
         </span>
       </div>
+      <div class="sel-row">
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="filter-chip on" data-filter="all">All</button>
+          <button type="button" class="filter-chip" data-filter="remaining">Remaining</button>
+          <button type="button" class="filter-chip" data-filter="done">Posted &amp; Skipped</button>
+        </span>
+        <button type="button" id="manageToggleBtn" class="tool-btn">✎ Manage groups</button>
+      </div>
     </div>
     <ul id="groupList" class="group-list"></ul>
     <div id="emptyState" class="empty-state">No matching groups found.</div>
@@ -224,6 +275,21 @@ body{padding-bottom:110px}
       <button type="button" id="resetProgressBtn" class="btn btn-secondary">Reset progress only</button>
       <button type="button" id="newPostBtn" class="btn btn-danger-ghost">🆕 New post (clear text + progress)</button>
     </div>
+    <div class="panel" id="managePanel" style="display:none" aria-label="Manage groups">
+      <div class="tool-label">Add / edit a group — saved on this device</div>
+      <div class="fr-row">
+        <input type="text" id="newGroupName" placeholder="Group name…">
+      </div>
+      <div class="fr-row">
+        <input type="text" id="newGroupUrl" placeholder="Group link (https://www.facebook.com/…)">
+        <button type="button" class="tool-btn" id="addGroupBtn">Add group</button>
+        <button type="button" class="tool-btn" id="cancelEditBtn" style="display:none">Cancel edit</button>
+      </div>
+      <div class="sel-info">While managing, each group row shows ↑ ↓ ✎ 🗑 buttons. Your edited list replaces the built-in list on this device only.</div>
+      <div class="fr-row">
+        <button type="button" class="tool-btn danger" id="resetGroupsBtn">Restore the original 14 groups</button>
+      </div>
+    </div>
   </section>
 </div>
 <div class="next-bar" id="nextBar">
@@ -233,7 +299,7 @@ body{padding-bottom:110px}
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-const GROUPS=[
+const DEFAULT_GROUPS=[
 {name:"සතුන් බේරාගැනීම (Animal Rescue)",url:"https://www.facebook.com/share/g/1PFaW7tCoE/?mibextid=wwXIfr"},
 {name:"වීදි සතුන්ට සරණක් සොයා",url:"https://www.facebook.com/share/g/1G3YQJpamG/?mibextid=wwXIfr"},
 {name:"අසරණයන් වෙනුවෙන් අපි",url:"https://www.facebook.com/share/g/1BiF5ok5Tf/?mibextid=wwXIfr"},
@@ -249,6 +315,10 @@ const GROUPS=[
 {name:"සුරතල් බල්ලන් ඇති කිරීමේ සංසදය (All Breed)",url:"https://www.facebook.com/share/g/1PWozFEMgW/?mibextid=wwXIfr"},
 {name:"අසරණ වීදි සතුන්ට සරණක් වෙමු",url:"https://www.facebook.com/share/g/1H2bmrMdBK/?mibextid=wwXIfr"}
 ];
+const K_GROUPS="fb_poster_groups_v1";
+let GROUPS=DEFAULT_GROUPS.slice();
+try{const savedGroups=JSON.parse(localStorage.getItem(K_GROUPS)||"null");if(Array.isArray(savedGroups)&&savedGroups.length&&savedGroups.every(g=>g&&g.name&&g.url))GROUPS=savedGroups;}catch(e){}
+function saveGroupsList(){try{localStorage.setItem(K_GROUPS,JSON.stringify(GROUPS));}catch(e){}}
 const K_TEXT="fb_poster_text_v1",K_STATE="fb_poster_state_v1",K_THEME="fb_poster_theme_v1";
 const ta=document.getElementById("postText"),selInfo=document.getElementById("selInfo"),saveStatus=document.getElementById("saveStatus");
 const toastEl=document.getElementById("toast");
@@ -294,6 +364,14 @@ function doAction(act){
     let pe=v.indexOf("\n\n",s); if(pe===-1)pe=v.length;
     if(ps>=pe){ps=lineBounds(v,s).s;pe=lineBounds(v,s).e;}
     ta.focus();ta.setSelectionRange(ps,pe);savedSel={start:ps,end:pe};updateInfo();
+  }
+  else if(act==="nextBlank"){
+    const re=/\[[^\]\n]+\]/g;let m,found=null;
+    re.lastIndex=e; m=re.exec(v); if(m)found=m;
+    if(!found){re.lastIndex=0;m=re.exec(v);if(m)found=m;}
+    if(!found){toast("No [blanks] left 🎉");return;}
+    ta.focus();ta.setSelectionRange(found.index,found.index+found[0].length);savedSel={start:found.index,end:found.index+found[0].length};updateInfo();
+    const left=(v.match(/\[[^\]\n]+\]/g)||[]).length;toast("Blank selected — type to replace it · "+left+" blank"+(left===1?"":"s")+" in post");
   }
   else if(act==="cleanup"){
     if(!v){toast("Editor is empty",true);return;}
@@ -364,6 +442,106 @@ document.getElementById("replaceOneBtn").addEventListener("click",()=>{
   applyEdit(v.slice(0,idx)+r+v.slice(idx+f.length),idx,idx+r.length);
   countMatches();
 });
+/* Templates with blanks */
+const TEMPLATES=[
+{label:"🐶 Dog appeal",text:"[සිරස්තලය — උදා: අසනීපයෙන් පෙළෙන අහිංසකයාට පිහිට වෙමු! 🥺💔]\n\n[මෙම සතා ගැන, අසනීපය ගැන සහ අවශ්‍ය ප්‍රතිකාර ගැන විස්තරය මෙතැන ලියන්න.]\n\n📍 ස්ථානය: [ස්ථානය]\n📞 වැඩි විස්තර: [දුරකථන අංකය]\n\nමෙම සටහන අන් අය අතරේ Share කර හෝ මේ අහිංසක ජීවිතය බේරාගැනීමට දායක වන්න. 🙏\n\n--- ලැබුණු පණිවිඩයකි ---"},
+{label:"🐱 Cat appeal",text:"[සිරස්තලය — උදා: කෑම නොකා කෙට්ටු වී ඉන්න මේ පූසාට පිහිට වෙමු! 🥺💔]\n\n[මෙම පූසා ගැන, අසනීපය ගැන සහ අවශ්‍ය ප්‍රතිකාර ගැන විස්තරය මෙතැන ලියන්න.]\n\n📍 ස්ථානය: [ස්ථානය]\n📞 වැඩි විස්තර: [දුරකථන අංකය]\n\nමෙම සටහන අන් අය අතරේ Share කර හෝ මේ අහිංසක ජීවිතය බේරාගැනීමට දායක වන්න. 🙏\n\n--- ලැබුණු පණිවිඩයකි ---"},
+{label:"💰 Fundraising",text:"[සිරස්තලය — උදා: රුධිර පරීක්ෂණ සහ වෛද්‍ය බිල් වෙනුවෙන් පිහිටක් වෙමු! 🥺💔]\n\n[අවශ්‍ය ප්‍රතිකාරය සහ ඇස්තමේන්තු වියදම මෙතැන ලියන්න.]\n\n🏦 බැංකු විස්තර:\nනම: [නම]\nබැංකුව: [බැංකුව]\nගිණුම් අංකය: [ගිණුම් අංකය]\n\n📍 ස්ථානය: [ස්ථානය]\n📞 වැඩි විස්තර: [දුරකථන අංකය]\n\n--- ලැබුණු පණිවිඩයකි ---"},
+{label:"🏠 Adoption",text:"[සිරස්තලය — උදා: ආදරණීය නිවසක් සොයන අහිංසකයෙක්! 🐾]\n\n[සතා ගැන: වයස, ගැහැණු/පිරිමි, ස්වභාවය සහ සෞඛ්‍ය තත්ත්වය මෙතැන ලියන්න.]\n\n📍 ස්ථානය: [ස්ථානය]\n📞 වැඩි විස්තර: [දුරකථන අංකය]\n\n--- ලැබුණු පණිවිඩයකි ---"}
+];
+const templateBar=document.getElementById("templateBar");
+let templateArmed=-1,templateArmTimer=null;
+TEMPLATES.forEach((tpl,i)=>{
+  const b=document.createElement("button");b.type="button";b.className="chip-btn";b.textContent=tpl.label;
+  b.addEventListener("click",()=>{
+    if(ta.value.trim()&&templateArmed!==i){
+      templateArmed=i;toast("Tap “"+tpl.label+"” again to REPLACE the current text (Undo can reverse it)",true);
+      clearTimeout(templateArmTimer);templateArmTimer=setTimeout(()=>templateArmed=-1,3500);return;
+    }
+    templateArmed=-1;
+    applyEdit(tpl.text,0,0);
+    // jump straight to the first blank
+    setTimeout(()=>doAction("nextBlank"),50);
+    toast("Template loaded — fill in each [blank]");
+  });
+  templateBar.appendChild(b);
+});
+/* Voice typing (Sinhala) */
+const voiceBtn=document.getElementById("voiceBtn");
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recog=null,listening=false;
+voiceBtn.addEventListener("click",()=>{
+  if(!SR){toast("Voice typing isn't supported in this browser — try opening the app in Chrome",true);return;}
+  if(listening&&recog){recog.stop();return;}
+  recog=new SR();recog.lang="si-LK";recog.continuous=true;recog.interimResults=false;
+  recog.onresult=ev=>{
+    let said="";
+    for(let i=ev.resultIndex;i<ev.results.length;i++){if(ev.results[i].isFinal)said+=ev.results[i][0].transcript;}
+    if(said){
+      ta.focus();
+      const prefix=(ta.value&&ta.selectionStart>0&&!/\s/.test(ta.value.charAt(ta.selectionStart-1)))?" ":"";
+      insertAtCursor(prefix+said);
+    }
+  };
+  recog.onend=()=>{listening=false;voiceBtn.classList.remove("voice-on");voiceBtn.textContent="🎤 Voice (Sinhala)";};
+  recog.onerror=ev=>{listening=false;voiceBtn.classList.remove("voice-on");voiceBtn.textContent="🎤 Voice (Sinhala)";if(ev.error==="not-allowed")toast("Microphone permission was blocked — allow the mic to use voice typing",true);};
+  try{recog.start();listening=true;voiceBtn.classList.add("voice-on");voiceBtn.textContent="🎤 Listening… tap to stop";toast("Listening in Sinhala — speak now");}
+  catch(e){toast("Could not start voice typing",true);}
+});
+/* Drafts + History */
+const K_DRAFTS="fb_poster_drafts_v1",K_HISTORY="fb_poster_history_v1";
+let drafts={};try{drafts=JSON.parse(localStorage.getItem(K_DRAFTS)||"{}")||{};}catch(e){drafts={};}
+let historyList=[];try{historyList=JSON.parse(localStorage.getItem(K_HISTORY)||"[]");if(!Array.isArray(historyList))historyList=[];}catch(e){historyList=[];}
+function saveDrafts(){try{localStorage.setItem(K_DRAFTS,JSON.stringify(drafts));}catch(e){}}
+function saveHistory(){try{localStorage.setItem(K_HISTORY,JSON.stringify(historyList));}catch(e){}}
+const draftSelect=document.getElementById("draftSelect");
+function renderDrafts(){
+  const names=Object.keys(drafts);
+  draftSelect.innerHTML="";
+  if(!names.length){const o=document.createElement("option");o.value="";o.textContent="— No drafts saved —";draftSelect.appendChild(o);return;}
+  names.sort().forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;draftSelect.appendChild(o);});
+}
+document.getElementById("saveDraftBtn").addEventListener("click",()=>{
+  const name=document.getElementById("draftNameInput").value.trim();
+  if(!name){toast("Give the draft a name first",true);return;}
+  if(!ta.value){toast("Editor is empty — nothing to save as a draft",true);return;}
+  drafts[name]=ta.value;saveDrafts();renderDrafts();draftSelect.value=name;toast("Draft saved ✓ — "+name);
+});
+document.getElementById("loadDraftBtn").addEventListener("click",()=>{
+  const name=draftSelect.value;
+  if(!name||!(name in drafts)){toast("Pick a draft first",true);return;}
+  applyEdit(drafts[name],0,0);toast("Draft loaded — "+name);
+});
+document.getElementById("deleteDraftBtn").addEventListener("click",()=>{
+  const name=draftSelect.value;
+  if(!name||!(name in drafts)){toast("Pick a draft first",true);return;}
+  delete drafts[name];saveDrafts();renderDrafts();toast("Draft deleted — "+name);
+});
+const historyEl=document.getElementById("historyList");
+function renderHistory(){
+  historyEl.innerHTML="";
+  if(!historyList.length){historyEl.innerHTML='<div class="hist-sub">Nothing archived yet.</div>';return;}
+  historyList.forEach((h,idx)=>{
+    const row=document.createElement("div");row.className="hist-item";
+    const info=document.createElement("div");info.className="hist-info";
+    const t=document.createElement("div");t.className="hist-title";t.textContent=(h.text.split("\n").find(l=>l.trim())||"Post");
+    const sub=document.createElement("div");sub.className="hist-sub";sub.textContent=h.date+" · posted "+(h.posted||0)+"/"+(h.total||GROUPS.length);
+    info.appendChild(t);info.appendChild(sub);
+    const load=document.createElement("button");load.type="button";load.className="mini-btn";load.textContent="Load";
+    load.addEventListener("click",()=>{applyEdit(h.text,0,0);toast("Loaded from history");});
+    const del=document.createElement("button");del.type="button";del.className="mini-btn danger";del.textContent="🗑";
+    del.addEventListener("click",()=>{historyList.splice(idx,1);saveHistory();renderHistory();});
+    row.appendChild(info);row.appendChild(load);row.appendChild(del);historyEl.appendChild(row);
+  });
+}
+function archiveToHistory(){
+  if(!ta.value.trim())return;
+  const posted=GROUPS.filter(g=>state[g.url]==="posted").length;
+  const d=new Date();
+  const dateStr=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  historyList.unshift({date:dateStr,text:ta.value,posted:posted,total:GROUPS.length});
+  historyList=historyList.slice(0,10);saveHistory();renderHistory();
+}
 /* Groups */
 let state={};
 try{state=JSON.parse(localStorage.getItem(K_STATE)||"{}")||{};}catch(e){state={};}
@@ -401,9 +579,12 @@ function nextGroup(){return GROUPS.find(g=>state[g.url]!=="posted"&&state[g.url]
 function renderGroups(){
   const q=searchEl.value.trim().toLocaleLowerCase();listEl.innerHTML="";let visible=0;
   const ng=nextGroup();const nextUrl=ng?ng.url:null;
-  GROUPS.forEach(g=>{
-    if(q&&!g.name.toLocaleLowerCase().includes(q))return;visible++;
+  GROUPS.forEach((g,gIdx)=>{
     const st=state[g.url]||"";
+    if(q&&!g.name.toLocaleLowerCase().includes(q))return;
+    if(groupFilter==="remaining"&&(st==="posted"||st==="skipped"))return;
+    if(groupFilter==="done"&&st!=="posted"&&st!=="skipped")return;
+    visible++;
     const li=document.createElement("li");li.className="group-row"+(g.url===nextUrl?" next":"")+(selGroups.has(g.url)?" checked":"");
     const cb=document.createElement("input");cb.type="checkbox";cb.className="group-checkbox";cb.checked=selGroups.has(g.url);cb.setAttribute("aria-label","Select "+g.name+" for copying names + links");
     cb.addEventListener("change",()=>{if(cb.checked)selGroups.add(g.url);else selGroups.delete(g.url);saveSelGroups();li.classList.toggle("checked",cb.checked);updateSelUI();});
@@ -422,7 +603,13 @@ function renderGroups(){
     done.addEventListener("click",()=>{if(state[g.url]==="posted"){delete state[g.url];}else{state[g.url]="posted";toast("Marked posted ✓");}saveState();renderGroups();});
     btns.appendChild(open);btns.appendChild(skip);btns.appendChild(done);
     const ext=document.createElement("a");ext.href=g.url;ext.target="_blank";ext.rel="noopener noreferrer";ext.className="group-link-btn";ext.textContent="↗";ext.title="Open group (without copying)";ext.setAttribute("aria-label","Open "+g.name);
-    li.appendChild(info);li.appendChild(btns);li.appendChild(ext);listEl.appendChild(li);
+    const mg=document.createElement("div");mg.className="manage-btns";
+    const mkBtn=(label,title,fn,dis)=>{const b=document.createElement("button");b.type="button";b.className="mini-btn";b.textContent=label;b.title=title;b.disabled=!!dis;b.addEventListener("click",fn);return b;};
+    mg.appendChild(mkBtn("↑","Move up",()=>{if(gIdx>0){const t=GROUPS[gIdx-1];GROUPS[gIdx-1]=GROUPS[gIdx];GROUPS[gIdx]=t;saveGroupsList();renderGroups();}},gIdx===0));
+    mg.appendChild(mkBtn("↓","Move down",()=>{if(gIdx<GROUPS.length-1){const t=GROUPS[gIdx+1];GROUPS[gIdx+1]=GROUPS[gIdx];GROUPS[gIdx]=t;saveGroupsList();renderGroups();}},gIdx===GROUPS.length-1));
+    mg.appendChild(mkBtn("✎","Edit group",()=>{startEditGroup(gIdx);}));
+    mg.appendChild(mkBtn("🗑","Remove group",()=>{if(mg.dataset.confirm==="1"){GROUPS.splice(gIdx,1);delete state[g.url];selGroups.delete(g.url);saveGroupsList();saveState();saveSelGroups();renderGroups();toast("Group removed");}else{mg.dataset.confirm="1";toast("Tap 🗑 again to remove “"+g.name+"”",true);setTimeout(()=>mg.dataset.confirm="",3000);}}));
+    li.appendChild(info);li.appendChild(btns);li.appendChild(ext);li.appendChild(mg);listEl.appendChild(li);
   });
   updateSelUI();
   emptyEl.classList.toggle("visible",visible===0);
@@ -435,11 +622,59 @@ function renderGroups(){
 }
 document.getElementById("nextBtn").addEventListener("click",()=>{const ng=nextGroup();if(ng)openGroup(ng);});
 searchEl.addEventListener("input",renderGroups);
+/* Filter chips */
+let groupFilter="all";
+document.querySelectorAll(".filter-chip").forEach(chip=>{
+  chip.addEventListener("click",()=>{
+    document.querySelectorAll(".filter-chip").forEach(c=>c.classList.remove("on"));
+    chip.classList.add("on");groupFilter=chip.dataset.filter;renderGroups();
+  });
+});
+/* Manage groups */
+let editIdx=-1;
+const managePanel=document.getElementById("managePanel"),newGroupName=document.getElementById("newGroupName"),newGroupUrl=document.getElementById("newGroupUrl"),addGroupBtn=document.getElementById("addGroupBtn"),cancelEditBtn=document.getElementById("cancelEditBtn");
+document.getElementById("manageToggleBtn").addEventListener("click",()=>{
+  const open=managePanel.style.display!=="none";
+  managePanel.style.display=open?"none":"flex";
+  document.body.classList.toggle("managing",!open);
+  document.getElementById("manageToggleBtn").textContent=open?"✎ Manage groups":"✎ Done managing";
+});
+function startEditGroup(idx){
+  editIdx=idx;newGroupName.value=GROUPS[idx].name;newGroupUrl.value=GROUPS[idx].url;
+  addGroupBtn.textContent="Save changes";cancelEditBtn.style.display="";
+  if(managePanel.style.display==="none"){managePanel.style.display="flex";document.body.classList.add("managing");}
+  newGroupName.focus();window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+}
+cancelEditBtn.addEventListener("click",()=>{editIdx=-1;newGroupName.value="";newGroupUrl.value="";addGroupBtn.textContent="Add group";cancelEditBtn.style.display="none";});
+addGroupBtn.addEventListener("click",()=>{
+  const name=newGroupName.value.trim();let url=newGroupUrl.value.trim();
+  if(!name){toast("Type the group name first",true);return;}
+  if(!url){toast("Paste the group link first",true);return;}
+  if(!/^https?:\/\//i.test(url))url="https://"+url;
+  if(editIdx>=0){
+    const oldUrl=GROUPS[editIdx].url;
+    if(url!==oldUrl&&state[oldUrl]){state[url]=state[oldUrl];delete state[oldUrl];saveState();}
+    if(url!==oldUrl&&selGroups.has(oldUrl)){selGroups.delete(oldUrl);selGroups.add(url);saveSelGroups();}
+    GROUPS[editIdx]={name:name,url:url};saveGroupsList();renderGroups();
+    editIdx=-1;newGroupName.value="";newGroupUrl.value="";addGroupBtn.textContent="Add group";cancelEditBtn.style.display="none";
+    toast("Group updated ✓");
+  }else{
+    if(GROUPS.some(g=>g.url===url)){toast("That group link is already in the list",true);return;}
+    GROUPS.push({name:name,url:url});saveGroupsList();renderGroups();
+    newGroupName.value="";newGroupUrl.value="";toast("Group added ✓ — it's at the end of the list");
+  }
+});
+let resetGroupsArmed=false;
+document.getElementById("resetGroupsBtn").addEventListener("click",()=>{
+  if(!resetGroupsArmed){resetGroupsArmed=true;toast("Tap again to restore the original 14 groups (your added groups will be removed)",true);setTimeout(()=>resetGroupsArmed=false,3500);return;}
+  resetGroupsArmed=false;GROUPS=DEFAULT_GROUPS.slice();try{localStorage.removeItem(K_GROUPS);}catch(e){}
+  renderGroups();toast("Original 14 groups restored");
+});
 document.getElementById("resetProgressBtn").addEventListener("click",()=>{state={};saveState();renderGroups();toast("Progress reset");});
 let newPostArmed=false;
 document.getElementById("newPostBtn").addEventListener("click",()=>{
   if(!newPostArmed){newPostArmed=true;toast("Tap New post again to clear text + progress",true);setTimeout(()=>newPostArmed=false,3000);return;}
-  newPostArmed=false;pushHistory();ta.value="";lastPushed="";state={};saveState();saveNow(false);renderGroups();updateInfo();toast("Ready for a new post");
+  newPostArmed=false;archiveToHistory();pushHistory();ta.value="";lastPushed="";state={};saveState();saveNow(false);renderGroups();updateInfo();toast("Archived to History — ready for a new post");
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)renderGroups();});
 /* Theme */
@@ -449,7 +684,8 @@ const themeIcon=document.getElementById("themeIcon"),themeLabel=document.getElem
 function applyTheme(){const r=document.documentElement;if(themeMode==="auto"){r.removeAttribute("data-theme");themeIcon.textContent="🌓";themeLabel.textContent="Auto";}else if(themeMode==="light"){r.setAttribute("data-theme","light");themeIcon.textContent="☀️";themeLabel.textContent="Light";}else{r.setAttribute("data-theme","dark");themeIcon.textContent="🌙";themeLabel.textContent="Dark";}}
 document.getElementById("themeToggleBtn").addEventListener("click",()=>{themeMode=THEMES[(THEMES.indexOf(themeMode)+1)%THEMES.length];applyTheme();try{localStorage.setItem(K_THEME,themeMode);}catch(e){}});
 /* Init */
-(function init(){applyTheme();applyFont();try{ta.value=localStorage.getItem(K_TEXT)||"";}catch(e){}lastPushed=ta.value;if(ta.value){saveStatus.textContent="Saved ✓ (restored)";saveStatus.classList.add("saved");}updateInfo();renderGroups();})();
+(function init(){applyTheme();applyFont();try{ta.value=localStorage.getItem(K_TEXT)||"";}catch(e){}lastPushed=ta.value;if(ta.value){saveStatus.textContent="Saved ✓ (restored)";saveStatus.classList.add("saved");}updateInfo();renderDrafts();renderHistory();renderGroups();})();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});}
 </script>
 </body>
 </html>
